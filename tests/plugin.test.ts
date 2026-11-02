@@ -26,6 +26,106 @@ afterEach(() => {
 });
 
 describe("withRetry", () => {
+  it("does not retry POST by default", async () => {
+    const error = { code: "ECONNRESET" };
+    const send = vi.fn().mockRejectedValue(error);
+    const client = withRetry(createClient(send), {});
+    await expect(
+      client.send({ protocol: "rest", input: { method: "POST", url: "/pay" } }),
+    ).rejects.toBe(error);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("never replays a stream even with an explicit retry predicate", async () => {
+    const error = { status: 503 };
+    const send = vi.fn().mockRejectedValue(error);
+    const client = withRetry(createClient(send), { shouldRetry: () => true });
+    await expect(
+      client.send({ protocol: "rest", input: { method: "PUT", body: new ReadableStream() } }),
+    ).rejects.toBe(error);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries returned 503 responses and respects Retry-After", async () => {
+    vi.useFakeTimers();
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...response,
+        status: 503,
+        ok: false,
+        headers: { "Retry-After": "1" },
+      })
+      .mockResolvedValue(response);
+    const client = withRetry(createClient(send), { baseDelay: 0, jitter: false });
+    const result = client.send(request);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(send).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toBe(response);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the response rather than shortening an excessive Retry-After", async () => {
+    const unavailable = { ...response, status: 429, headers: { "retry-after": "60" } };
+    const send = vi.fn().mockResolvedValue(unavailable);
+    const client = withRetry(createClient(send), { maxDelay: 1000 });
+    await expect(client.send(request)).resolves.toBe(unavailable);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels backoff without sending another attempt", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const reason = new Error("cancelled");
+    const send = vi.fn().mockRejectedValue({ code: "ECONNRESET" });
+    const client = withRetry(createClient(send), { baseDelay: 1000, jitter: false });
+    const rejected = expect(client.send({ ...request, signal: controller.signal })).rejects.toBe(
+      reason,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort(reason);
+    await rejected;
+    await vi.runAllTimersAsync();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not multiply retries when installed twice", async () => {
+    vi.useFakeTimers();
+    const error = { status: 503 };
+    const send = vi.fn().mockRejectedValue(error);
+    const client = createClient(send);
+    withRetry(client, { maxRetries: 1, baseDelay: 0 });
+    const wrapped = client.send;
+    withRetry(client, { maxRetries: 10 });
+    expect(client.send).toBe(wrapped);
+    const rejected = expect(client.send(request)).rejects.toBe(error);
+    await vi.runAllTimersAsync();
+    await rejected;
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not log transport error messages or request URLs", async () => {
+    vi.useFakeTimers();
+    const logger = vi.fn();
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("synthetic-secret"), { code: "ECONNRESET" }))
+      .mockResolvedValue(response);
+    const client = withRetry(createClient(send), { baseDelay: 0 }, { verbose: true, logger });
+    const result = client.send(request);
+    await vi.runAllTimersAsync();
+    await result;
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("synthetic-secret");
+  });
+
+  it("declines retry beyond the elapsed budget", async () => {
+    const send = vi.fn().mockResolvedValue({ ...response, status: 503 });
+    const client = withRetry(createClient(send), { maxElapsedMs: 0 });
+    await client.send(request);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves the client binding, request and universal response", async () => {
     const send = vi.fn(function (this: IHyperCore, req: SendRequest) {
       expect(this).toBe(client);
