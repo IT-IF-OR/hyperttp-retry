@@ -1,16 +1,20 @@
 import type {
-  HyperCore,
+  IHyperCore,
   HyperPlugin,
-  InternalRequest,
-  HttpClientOptions,
+  SendRequest,
+  UniversalResponse,
+  HyperClientOptions,
   HyperttpError,
   RetryOptions,
-} from "@hyperttp/core";
+} from "@hyperttp/types";
 
 /**
  * @ru Хелпер для проверки, стоит ли вообще повторять этот тип ошибки
  */
-function isRetriable(error: HyperttpError): boolean {
+function isRetriable(error: unknown): error is Partial<HyperttpError> {
+  if (typeof error !== "object" || error === null) return false;
+
+  const { code, status, statusCode } = error as Partial<HyperttpError>;
   const networkErrors = [
     "ECONNRESET",
     "ETIMEDOUT",
@@ -20,35 +24,32 @@ function isRetriable(error: HyperttpError): boolean {
     "ENOTFOUND",
   ];
 
-  if (error.code && networkErrors.includes(error.code)) return true;
+  if (code && networkErrors.includes(code)) return true;
 
-  const status = error.status ?? error.statusCode;
-  if (status && (status >= 500 || status === 429)) return true;
+  const responseStatus = status ?? statusCode;
+  if (responseStatus && (responseStatus >= 500 || responseStatus === 429)) return true;
 
   return false;
 }
 
 export function withRetry(
-  client: HyperCore,
+  client: IHyperCore,
   options: RetryOptions,
-  config?: HttpClientOptions,
-): HyperCore {
-  const next = client.dispatch;
+  config?: HyperClientOptions,
+): IHyperCore {
+  const next = client.send.bind(client);
 
-  const {
-    maxRetries = 3,
-    baseDelay = 100,
-    maxDelay = 5000,
-    jitter = true,
-  } = options;
+  const { maxRetries = 3, baseDelay = 100, maxDelay = 5000, jitter = true } = options;
 
-  client.dispatch = async <T>(req: InternalRequest): Promise<T> => {
+  client.send = async <TOutput = unknown>(
+    req: SendRequest,
+  ): Promise<UniversalResponse<TOutput>> => {
     let attempt = 0;
 
     while (true) {
       try {
-        return (await next<T>(req)) as T;
-      } catch (error: any) {
+        return await next<TOutput>(req);
+      } catch (error: unknown) {
         attempt++;
 
         if (attempt > maxRetries || !isRetriable(error)) {
@@ -78,17 +79,17 @@ export function withRetry(
   return client;
 }
 
-declare module "@hyperttp/core" {
-  interface HyperttpPluginsExtension {
-    retry?: RetryOptions & { enabled?: boolean };
+declare module "@hyperttp/types" {
+  interface RetryOptions {
+    enabled?: boolean;
   }
 }
 
 export const RetryPlugin: HyperPlugin = {
   name: "hyperttp-retry",
   phase: "CONTROL",
-  enabled: (config: HttpClientOptions) => config.retry?.enabled !== false,
-  apply: (client: HyperCore, config: HttpClientOptions) => {
-    return withRetry(client, config.retry || {});
+  enabled: (config) => config.retry?.enabled !== false,
+  setup: ({ core, config }) => {
+    withRetry(core, config.retry ?? {}, config);
   },
 };
