@@ -176,11 +176,17 @@ export function withRetry(
   return client;
 }
 
-export const RetryPlugin: HyperPlugin = {
-  name: "hyperttp-retry",
-  phase: "CONTROL",
-  enabled: (config) => config.retry?.enabled !== false,
-  setup: ({ core, config }) => {
-    withRetry(core, config.retry ?? {}, config);
-  },
-};
+/** Fresh setup-bearing plugin for each Core; retries wrap send rather than nesting in Core. */
+export function createRetryPlugin(): HyperPlugin {
+  return {
+    name: "hyperttp-retry",
+    phase: "CONTROL",
+    enabled: (config) => config.retry?.enabled !== false,
+    setup: ({ core, config }) => {
+      withRetry(core, config.retry ?? {}, config);
+    },
+  };
+}
+
+/** @deprecated Use createRetryPlugin() for independent Core instances. */
+export const RetryPlugin: HyperPlugin = createRetryPlugin();

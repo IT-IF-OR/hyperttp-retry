@@ -5,7 +5,7 @@ import type {
   UniversalResponse,
 } from "@hyperttp/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RetryPlugin, withRetry } from "../src/plugin.js";
+import { RetryPlugin, createRetryPlugin, withRetry } from "../src/plugin.js";
 
 const request: SendRequest = { protocol: "rest", input: { method: "GET", url: "/" } };
 const response: UniversalResponse = {
@@ -226,3 +226,12 @@ describe("RetryPlugin", () => {
     expect(logger).toHaveBeenCalledWith("warn", expect.stringContaining("1/1 after 50ms"));
   });
 });
+
+ it("creates distinct retry plugin instances with the same compatibility surface", () => {
+  const first = createRetryPlugin();
+  const second = createRetryPlugin();
+  expect(first).not.toBe(second);
+  expect(first.name).toBe(RetryPlugin.name);
+  expect(first.setup).toBeTypeOf("function");
+  expect(first.shared).not.toBe(true);
+ });

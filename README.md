@@ -3,9 +3,9 @@
 Opt-in retries for HyperCore/HyperClient outgoing requests.
 
 ```ts
-import { RetryPlugin } from "@hyperttp/retry";
+import { createRetryPlugin } from "@hyperttp/retry";
 
-client.use(RetryPlugin);
+client.use(createRetryPlugin());
 ```
 
 Configure `retry` on the client before registration. The main `hyperttp` package
@@ -51,3 +51,5 @@ Streaming response retries require application-specific cleanup and are not
 supported by the default policy.
 
 This is an outgoing client policy, not server-side retry or authentication.
+
+Core 3 uses per-Core plugin ownership. Prefer `pluginFactories: [createRetryPlugin]` when deriving cores; the legacy `RetryPlugin` singleton is deprecated and cannot be reused across independent cores. Retries still run the entire send pipeline for each attempt.

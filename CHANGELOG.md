@@ -1,8 +1,13 @@
 # Changelog
 
+## [3.0.0] - 2026-11-03
+
+- Require `@hyperttp/types@^0.5.0` and validate against the registry declarations.
+- Added `createRetryPlugin()` for per-Core ownership; deprecated the reusable setup-bearing singleton without removing it.
+
 All notable changes to `@hyperttp/retry` are documented in this file.
 
-## 2.0.1
+## [2.0.1] - 2026-11-02
 
 ### Added
 
