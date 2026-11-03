@@ -227,11 +227,11 @@ describe("RetryPlugin", () => {
   });
 });
 
- it("creates distinct retry plugin instances with the same compatibility surface", () => {
+it("creates distinct retry plugin instances with the same compatibility surface", () => {
   const first = createRetryPlugin();
   const second = createRetryPlugin();
   expect(first).not.toBe(second);
   expect(first.name).toBe(RetryPlugin.name);
   expect(first.setup).toBeTypeOf("function");
   expect(first.shared).not.toBe(true);
- });
+});

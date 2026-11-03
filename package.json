@@ -1,11 +1,11 @@
 {
   "name": "@hyperttp/retry",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "keywords": [
     "hyperttp"
   ],
-  "author": "dirold2",
   "license": "MIT",
+  "author": "dirold2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/IT-IF-OR/hyperttp-retry.git"
@@ -22,13 +22,9 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
-    "./package.json": "./dist/package.json"
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc && esbuild 'dist/**/*.js' --outdir=dist --allow-overwrite --minify --sourcemap && d-build",
-    "dist": "d-dist",
-    "deploy": "npm run build && npm run dist",
-    "pub": "d-publish",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "lint:fix": "oxlint src --fix",
@@ -36,19 +32,19 @@
     "format:check": "oxfmt src --check",
     "test": "vitest run",
     "dev": "tsx src/index.ts",
-    "prepublishOnly": "npm run build"
+    "build": "node ../../scripts/build-package.ts",
+    "clean": "node --input-type=module -e 'import { rmSync } from \"node:fs\"; rmSync(\"dist\", { recursive: true, force: true });'"
   },
   "devDependencies": {
-    "@dirold2/dev-tools": "^1.1.3",
-    "@types/bun": "latest",
-    "@types/node": "latest",
+    "@types/bun": "^1.4.4",
+    "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
-    "oxfmt": "^0.75.0",
+    "oxfmt": "^0.76.0",
     "oxlint": "^1.90.0",
     "typescript": "^7.0.2",
-    "vitest": "latest"
+    "vitest": "^5.1.0"
   },
   "peerDependencies": {
-    "@hyperttp/types": "^0.5.0"
+    "@hyperttp/types": "^0.5.3"
   }
 }
